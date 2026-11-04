@@ -1,0 +1,24 @@
+
+# Dependencies
+node_modules/
+
+# React build
+build/
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Database credentials and secrets
+server/utils/MyConstants.js
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local files
+.vscode/
+.DS_Store
+Thumbs.db

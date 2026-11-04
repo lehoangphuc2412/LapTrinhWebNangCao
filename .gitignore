@@ -1,0 +1,28 @@
+
+# Dependencies
+node_modules/
+
+# Build
+build/
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Database credentials
+/server/utils/MyConstants.js
+
+# Nested Git backups
+**/.git.backup/
+**/.git/
+
+# Logs
+*.log
+npm-debug.log*
+
+# VS Code and Windows
+.vscode/
+.DS_Store
+Thumbs.db
