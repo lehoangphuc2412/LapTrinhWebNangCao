@@ -61,6 +61,20 @@ const OrderSchema = mongoose.Schema(
     cdate: Number,
     total: Number,
     status: String,
+    paymentMethod: {
+  type: String,
+  enum: ['COD', 'VIETQR', 'MOMO', 'VNPAY'],
+  default: 'COD'
+},
+paymentStatus: {
+  type: String,
+  enum: ['UNPAID', 'PENDING', 'PAID', 'FAILED', 'REFUNDED'],
+  default: 'UNPAID'
+},
+paymentReference: {
+  type: String,
+  default: ''
+},
     customer: CustomerSchema,
     items: [ItemSchema]
   },

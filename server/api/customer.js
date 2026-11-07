@@ -299,6 +299,24 @@ router.put('/myprofile', verifyCustomerToken, async function (req, res) {
 router.post('/checkout', verifyCustomerToken, async function (req, res) {
   try {
     const items = req.body?.items;
+    const paymentMethod = req.body?.paymentMethod || 'COD';
+
+const allowedMethods = ['COD', 'VIETQR', 'MOMO', 'VNPAY'];
+
+if (!allowedMethods.includes(paymentMethod)) {
+  return res.status(400).json({
+    success: false,
+    message: 'Invalid payment method'
+  });
+}
+
+// Tạm thời chỉ xử lý COD cho đến khi tích hợp cổng thanh toán
+if (paymentMethod !== 'COD') {
+  return res.status(400).json({
+    success: false,
+    message: 'Online payment is not available yet'
+  });
+}
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -357,6 +375,9 @@ router.post('/checkout', verifyCustomerToken, async function (req, res) {
       cdate: new Date().getTime(),
       total: total,
       status: 'PENDING',
+      paymentMethod: paymentMethod,
+      paymentStatus: 'UNPAID',
+      paymentReference: '',
       customer: customer,
       items: orderItems
     };

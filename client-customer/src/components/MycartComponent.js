@@ -14,7 +14,8 @@ class Mycart extends Component {
 
     this.state = {
       redirect: false,
-      checkingOut: false
+      checkingOut: false,
+      paymentMethod: 'COD'
     };
   }
 
@@ -92,7 +93,9 @@ class Mycart extends Component {
       const response = await axios.post(
         'http://localhost:3000/api/customer/checkout',
         {
-          items: items
+          items: items,
+            paymentMethod: this.state.paymentMethod
+
         },
         {
           headers: {
@@ -102,7 +105,7 @@ class Mycart extends Component {
       );
 
       const result = response.data;
-
+ 
       if (result.success) {
         alert('Checkout successful!');
 
@@ -410,7 +413,36 @@ class Mycart extends Component {
                       Final order amount will be confirmed
                       when you place your order.
                     </p>
+<div style={{ margin: '20px 0' }}>
+  <h3>Payment Method</h3>
 
+  {[
+    ['COD', 'Cash on Delivery (COD)'],
+    ['VIETQR', 'Bank Transfer / VietQR'],
+    ['MOMO', 'MoMo Wallet'],
+    ['VNPAY', 'VNPay']
+  ].map(([value, label]) => (
+    <label
+      key={value}
+      style={{
+        display: 'block',
+        padding: '10px',
+        cursor: 'pointer'
+      }}
+    >
+      <input
+        type="radio"
+        name="paymentMethod"
+        value={value}
+        checked={this.state.paymentMethod === value}
+        onChange={() =>
+          this.setState({ paymentMethod: value })
+        }
+      />
+      {' '}{label}
+    </label>
+  ))}
+</div>
                     <button
                       type="button"
                       className="shop-cart-checkout"
