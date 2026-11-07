@@ -4,6 +4,7 @@ const router = express.Router();
 
 // utils
 const JwtUtil = require('../utils/JwtUtil');
+const EmailUtil = require('../utils/EmailUtil');
 
 // daos
 const AdminDAO = require('../models/AdminDAO');
@@ -238,5 +239,198 @@ router.get('/orders', JwtUtil.checkToken, async function (req, res) {
     });
   }
 });
+
+
+ // LAB 09 - ADMIN UPDATE ORDER STATUS
+router.put('/orders/status/:id', JwtUtil.checkToken, async function (req, res) {
+  try {
+    const id = req.params.id;
+    const status = req.body.status;
+
+    // Chỉ cho phép hai trạng thái trong Lab 09
+    if (!['APPROVED', 'CANCELED'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid order status'
+      });
+    }
+
+    // Kiểm tra ID đơn hàng
+    if (!Models.Order.db.base.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid order ID'
+      });
+    }
+
+    // Chỉ cho phép chuyển từ PENDING
+    const order = await Models.Order.findOneAndUpdate(
+      {
+        _id: id,
+        status: 'PENDING'
+      },
+      {
+        $set: { status: status }
+      },
+      {
+        new: true
+      }
+    );
+
+    if (!order) {
+      return res.status(409).json({
+        success: false,
+        message: 'Order not found or already processed'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Order status updated successfully',
+      status: order.status
+    });
+  } catch (error) {
+    console.error('Update order status error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Unable to update order status'
+    });
+  }
+});
+
+ // LAB 09 - ADMIN DEACTIVATE CUSTOMER
+router.put(
+  '/customers/deactive/:id',
+  JwtUtil.checkToken,
+  async function (req, res) {
+    try {
+      const id = req.params.id;
+
+      // Kiểm tra ID khách hàng
+      if (!Models.Customer.db.base.isValidObjectId(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid customer ID'
+        });
+      }
+
+      // Chỉ vô hiệu hóa tài khoản đang Active
+      const customer = await Models.Customer.findOneAndUpdate(
+        {
+          _id: id,
+          active: 1
+        },
+        {
+          $set: {
+            active: 0,
+            token: ''
+          }
+        },
+        {
+          new: true
+        }
+      );
+
+      if (!customer) {
+        return res.status(409).json({
+          success: false,
+          message: 'Customer not found or already inactive'
+        });
+      }
+
+      // Không trả về mật khẩu hoặc token
+      res.json({
+        success: true,
+        message: 'Customer deactivated successfully',
+        customer: {
+          _id: customer._id,
+          username: customer.username,
+          name: customer.name,
+          active: customer.active
+        }
+      });
+    } catch (error) {
+      console.error('Deactivate customer error:', error);
+
+      res.status(500).json({
+        success: false,
+        message: 'Unable to deactivate customer'
+      });
+    }
+  }
+);
+
+ // LAB 09 - ADMIN SEND ACTIVATION EMAIL
+router.get(
+  '/customers/sendmail/:id',
+  JwtUtil.checkToken,
+  async function (req, res) {
+    try {
+      const id = req.params.id;
+
+      // Kiểm tra ID khách hàng
+      if (!Models.Customer.db.base.isValidObjectId(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid customer ID'
+        });
+      }
+
+      // Lấy thông tin cần thiết
+      const customer = await Models.Customer.findById(id)
+        .select('name email active token');
+
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Customer not found'
+        });
+      }
+
+      // Không gửi mã kích hoạt cho tài khoản đã Active
+      if (Number(customer.active) === 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Customer is already active'
+        });
+      }
+
+      if (!customer.email || !customer.token) {
+        return res.status(400).json({
+          success: false,
+          message: 'Customer has no email or activation token'
+        });
+      }
+
+      // Không gửi đến email giả lập
+      if (customer.email.toLowerCase().endsWith('@example.com')) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot send mail to a demo email address'
+        });
+      }
+
+      // Dùng lại EmailUtil hiện tại
+      await EmailUtil.send(
+        customer.email,
+        customer._id,
+        customer.token
+      );
+
+      return res.json({
+        success: true,
+        message: 'Activation email sent successfully'
+      });
+    } catch (error) {
+      console.error('Admin send mail error:', error);
+
+      return res.status(500).json({
+        success: false,
+        message: 'Unable to send activation email'
+      });
+    }
+  }
+);
 
 module.exports = router;
