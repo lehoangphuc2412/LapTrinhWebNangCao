@@ -13,7 +13,9 @@ class Order extends Component {
       orders: [],
       selectedOrder: null,
       loading: true,
+      updatingId: null,
       error: '',
+      message: '',
       keyword: '',
       statusFilter: 'ALL'
     };
@@ -37,6 +39,7 @@ class Order extends Component {
     return date.toLocaleString('vi-VN');
   }
 
+  // GET - Lấy danh sách đơn hàng
   async apiGetOrders() {
     this.setState({
       loading: true,
@@ -74,10 +77,119 @@ class Order extends Component {
 
       this.setState({
         loading: false,
-        error:
-          'Unable to load orders. Please check the Admin API.'
+        error: 'Cannot load orders. Please check Admin API.'
       });
     }
+  }
+
+  // PUT - Duyệt hoặc hủy đơn hàng
+  async apiUpdateStatus(orderId, newStatus) {
+    if (this.state.updatingId) return;
+
+    if (!['APPROVED', 'CANCELED'].includes(newStatus)) {
+      return;
+    }
+
+    const action =
+      newStatus === 'APPROVED' ? 'approve' : 'cancel';
+
+    const confirmed = window.confirm(
+      `Are you sure you want to ${action} this order?`
+    );
+
+    if (!confirmed) return;
+
+    this.setState({
+      updatingId: orderId,
+      message: ''
+    });
+
+    try {
+      const response = await axios.put(
+        `/api/admin/orders/status/${orderId}`,
+        {
+          status: newStatus
+        },
+        {
+          headers: {
+            'x-access-token': this.context.token
+          }
+        }
+      );
+
+      if (response.data.success) {
+        this.setState({
+          message: `Order ${newStatus.toLowerCase()} successfully!`
+        });
+
+        // Lấy lại dữ liệu thật từ MongoDB
+        await this.apiGetOrders();
+      } else {
+        alert(
+          response.data.message ||
+          'Unable to update order status.'
+        );
+      }
+    } catch (error) {
+      console.error('Update order status error:', error);
+
+      alert(
+        error.response?.data?.message ||
+        'Failed to update order status.'
+      );
+
+      // Đồng bộ lại nếu trạng thái đã bị thay đổi
+      await this.apiGetOrders();
+    } finally {
+      this.setState({
+        updatingId: null
+      });
+    }
+  }
+
+  // Nút APPROVE / CANCEL
+  renderStatusActions(order) {
+    const status = String(
+      order.status || ''
+    ).toUpperCase();
+
+    if (status !== 'PENDING') {
+      return (
+        <span className="admin-order-processed">
+          Processed
+        </span>
+      );
+    }
+
+    const busy = this.state.updatingId !== null;
+
+    return (
+      <div className="admin-order-action-buttons">
+        <button
+          type="button"
+          className="admin-order-approve"
+          disabled={busy}
+          onClick={() =>
+            this.apiUpdateStatus(order._id, 'APPROVED')
+          }
+        >
+          {this.state.updatingId === order._id
+            ? 'Processing...'
+            : 'Approve'}
+        </button>
+
+        <button
+          type="button"
+          className="admin-order-cancel"
+          disabled={busy}
+          onClick={() =>
+            this.apiUpdateStatus(order._id, 'CANCELED')
+          }
+        >
+          Cancel
+        </button>
+      </div>
+    );
   }
 
   render() {
@@ -86,6 +198,7 @@ class Order extends Component {
       selectedOrder,
       loading,
       error,
+      message,
       keyword,
       statusFilter
     } = this.state;
@@ -95,13 +208,15 @@ class Order extends Component {
         String(order.status).toUpperCase() === 'PENDING'
     ).length;
 
-    const statuses = [
-      ...new Set(
-        orders
-          .map((order) => String(order.status || '').toUpperCase())
-          .filter(Boolean)
-      )
-    ];
+    const approvedCount = orders.filter(
+      (order) =>
+        String(order.status).toUpperCase() === 'APPROVED'
+    ).length;
+
+    const canceledCount = orders.filter(
+      (order) =>
+        String(order.status).toUpperCase() === 'CANCELED'
+    ).length;
 
     const filteredOrders = orders.filter((order) => {
       const text = [
@@ -127,19 +242,21 @@ class Order extends Component {
 
     return (
       <div className="admin-order-page">
-        <div className="admin-order-heading">
-          <div>
-            <span className="admin-order-label">
-              SHOPONLINE ADMIN
-            </span>
 
-            <h1>Order Management</h1>
-            <p>
-              Track customer orders and view purchase details.
-            </p>
-          </div>
+        {/* PAGE HEADING */}
+        <div className="admin-order-heading">
+          <span className="admin-order-label">
+            SHOPONLINE ADMIN
+          </span>
+
+          <h1>Order Management</h1>
+
+          <p>
+            Manage customer orders, approve or cancel requests.
+          </p>
         </div>
 
+        {/* STATISTICS */}
         <div className="admin-order-stats">
           <div className="admin-order-stat">
             <span>Total Orders</span>
@@ -152,16 +269,22 @@ class Order extends Component {
           </div>
 
           <div className="admin-order-stat">
-            <span>Other Status</span>
-            <strong>{orders.length - pendingCount}</strong>
+            <span>Approved</span>
+            <strong>{approvedCount}</strong>
+          </div>
+
+          <div className="admin-order-stat">
+            <span>Canceled</span>
+            <strong>{canceledCount}</strong>
           </div>
         </div>
 
+        {/* ORDER LIST */}
         <section className="admin-order-card">
           <div className="admin-order-toolbar">
             <div>
               <h2>Order List</h2>
-              <p>Select an order to see its details.</p>
+              <p>View and manage all customer orders.</p>
             </div>
 
             <div className="admin-order-tools">
@@ -170,7 +293,9 @@ class Order extends Component {
                 placeholder="Search orders..."
                 value={keyword}
                 onChange={(e) =>
-                  this.setState({ keyword: e.target.value })
+                  this.setState({
+                    keyword: e.target.value
+                  })
                 }
               />
 
@@ -183,23 +308,26 @@ class Order extends Component {
                 }
               >
                 <option value="ALL">All Status</option>
-
-                {statuses.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="CANCELED">Canceled</option>
               </select>
 
               <button
                 type="button"
                 onClick={() => this.apiGetOrders()}
-                disabled={loading}
+                disabled={loading || this.state.updatingId !== null}
               >
                 Refresh
               </button>
             </div>
           </div>
+
+          {message && (
+            <div className="admin-order-success-message">
+              {message}
+            </div>
+          )}
 
           {loading ? (
             <div className="admin-order-empty">
@@ -208,6 +336,7 @@ class Order extends Component {
           ) : error ? (
             <div className="admin-order-empty">
               <p>{error}</p>
+
               <button
                 type="button"
                 onClick={() => this.apiGetOrders()}
@@ -230,7 +359,8 @@ class Order extends Component {
                     <th>Date</th>
                     <th>Total</th>
                     <th>Status</th>
-                    <th>Action</th>
+                    <th>Details</th>
+                    <th>Manage</th>
                   </tr>
                 </thead>
 
@@ -254,12 +384,15 @@ class Order extends Component {
                           <strong>
                             {order.customer?.name || 'N/A'}
                           </strong>
+
                           <small>
                             {order.customer?.phone || 'No phone'}
                           </small>
                         </td>
 
-                        <td>{this.formatDate(order.cdate)}</td>
+                        <td>
+                          {this.formatDate(order.cdate)}
+                        </td>
 
                         <td>
                           <strong className="admin-order-money">
@@ -273,7 +406,11 @@ class Order extends Component {
                               'admin-order-status ' +
                               (status === 'PENDING'
                                 ? 'pending'
-                                : 'other')
+                                : status === 'APPROVED'
+                                  ? 'approved'
+                                  : status === 'CANCELED'
+                                    ? 'canceled'
+                                    : 'other')
                             }
                           >
                             {status}
@@ -293,6 +430,10 @@ class Order extends Component {
                             View Details
                           </button>
                         </td>
+
+                        <td>
+                          {this.renderStatusActions(order)}
+                        </td>
                       </tr>
                     );
                   })}
@@ -302,6 +443,7 @@ class Order extends Component {
           )}
         </section>
 
+        {/* ORDER DETAILS */}
         {selectedOrder && (
           <section className="admin-order-card admin-order-detail">
             <div className="admin-order-detail-header">
@@ -314,7 +456,9 @@ class Order extends Component {
                 type="button"
                 className="admin-order-close"
                 onClick={() =>
-                  this.setState({ selectedOrder: null })
+                  this.setState({
+                    selectedOrder: null
+                  })
                 }
               >
                 Close
@@ -333,7 +477,7 @@ class Order extends Component {
               </p>
 
               <p>
-                <strong>Order Date:</strong>{' '}
+                <strong>Date:</strong>{' '}
                 {this.formatDate(selectedOrder.cdate)}
               </p>
 
@@ -403,6 +547,8 @@ class Order extends Component {
                 {this.formatPrice(selectedOrder.total)}
               </strong>
             </div>
+
+            {this.renderStatusActions(selectedOrder)}
           </section>
         )}
       </div>
