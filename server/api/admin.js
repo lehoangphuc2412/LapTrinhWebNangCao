@@ -396,12 +396,20 @@ router.get(
         });
       }
 
-      if (!customer.email || !customer.token) {
-        return res.status(400).json({
-          success: false,
-          message: 'Customer has no email or activation token'
-        });
-      }
+      if (!customer.email) {
+  return res.status(400).json({
+    success: false,
+    message: 'Customer has no email'
+  });
+}
+
+// Tạo Token mới nếu Token cũ đã bị xóa
+if (!customer.token) {
+  const crypto = require('crypto');
+
+  customer.token = crypto.randomBytes(32).toString('hex');
+  await customer.save();
+}
 
       // Không gửi đến email giả lập
       if (customer.email.toLowerCase().endsWith('@example.com')) {
